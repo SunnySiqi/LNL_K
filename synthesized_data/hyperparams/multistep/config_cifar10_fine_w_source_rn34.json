@@ -1,0 +1,96 @@
+{
+    "name": "cifar10_resnet34_fine_w_noise_source",
+    "n_gpu": 1,
+    "seed": 123,
+
+    "arch": {
+        "type": "resnet34",
+        "args": {"num_classes":10}
+    },
+
+    "num_classes": 10,
+
+    "data_loader": {
+        "type": "CIFAR10DataLoader",
+        "args":{
+            "data_dir": "./dir_to_data",
+            "batch_size": 128,
+            "shuffle": true,
+            "num_batches": 0,
+            "validation_split": 0,
+            "num_workers": 8,
+            "pin_memory": true
+        }
+    },
+
+
+    "optimizer": {
+        "type": "SGD",
+        "args":{
+            "lr": 0.02,
+            "momentum": 0.9,
+            "weight_decay": 1e-3
+        }
+    },
+    
+    "train_loss": {
+        "type": "CCELoss"
+    },
+
+    "val_loss": "CrossEntropyLoss",
+    "metrics": [
+        "metric_overall", "metric_top5"
+    ],
+
+    "lr_scheduler": {
+        "type": "MultiStepLR",
+        "args": {
+            "milestones": [40, 80],
+            "gamma": 0.01
+        }
+    },
+
+    "trainer": {
+        "epochs": 120,
+        "warmup": 40,
+        "save_dir": "saved/",
+        "save_period": 1,
+        "verbosity": 2,
+        "label_dir": "saved/",
+        "monitor": "max val_metric_overall",
+        "early_stop": 2000,
+        "tensorboard": false,
+        "mlflow": true,
+        "_percent": "Percentage of noise",
+        "percent": 0.7,
+        "_begin": "When to begin updating labels",
+        "begin": 0,
+        "_asym": "symmetric noise if false",
+        "asym": true,
+        "asym_pairs": [["9", "1"], ["3", "5"], ["4", "7"]],
+        "control": false,
+        "non_ctl_cls_sample": 500,
+        "ctl_cls_sample": 4500,
+        "ctl_cls_lower_bound": 5,
+        "get_noise_source": 10
+    },
+
+
+    "subset_training": {
+        "oracle": false,
+        "use_crust": false,
+        "adptive_crust": false,
+        "crust_fl_ration": 0.3,
+        "use_gmm": false,
+        "gmm_ratio": 0.2,
+        "use_class_gmm": false,
+        "naive_init": false,
+        "naive_centroid_init": false,
+        "use_sep_gmm":false,
+        "self_filter": false,
+        "self_filter_w": false,
+        "self_filter_k": 2,
+        "fine_with_source": true,
+        "clean_epoch": 0
+    }
+}
