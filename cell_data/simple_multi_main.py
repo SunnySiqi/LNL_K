@@ -22,6 +22,10 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from adaptation_methods import *
 
+ 
+# adding Folder_2 to the system path
+sys.path.insert(0, '/net/ivcfs5/mnt/data/swang/research/LNL+K/LNL_K/adaptation_methods')
+
 # Training settings
 parser = argparse.ArgumentParser(description='Drug Discovery')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
