@@ -116,11 +116,7 @@ class TripletImageLoader(torch.utils.data.Dataset):
 			treatment2id_filename = os.path.join('data', dataset.lower() + '_' + 'treatment2id.pkl')
 			self.treatment2index = pickle.load(open(treatment2id_filename, 'rb'))['data']
 			self.imnames += pickle.load(open(filename, 'rb'))['data']
-			# if split == 'test':
-			# 	filename = os.path.join('data', dataset.lower() + '_val_' + args.domain_label + '_' + args.split + '.pkl')
-			# 	self.imnames += pickle.load(open(filename, 'rb'))['data']
-				# filename = os.path.join('data', dataset.lower() + '_train_' + args.domain_label + '_' + args.split + '.pkl')
-				# self.imnames += pickle.load(open(filename, 'rb'))['data']
+
 		if self.args.treatment_hard:
 			select_treatment_file_name = os.path.join('data', dataset.lower() + '_' + 'select_hard_t_id.pkl')
 		else:
@@ -147,15 +143,6 @@ class TripletImageLoader(torch.utils.data.Dataset):
 				if args.test_normal or args.test_strong or self.treatment_count[treatment] > self.max_img_t and self.max_img_t != -1:
 					continue
 			else:
-				# treat_label = treatment
-				# if self.treatment2index[treatment] >= args.max_num_treatment and args.max_num_treatment != -1:
-				# 	continue
-				# if treat_label not in self.treatment_count:
-				# 	self.treatment_count[treat_label] = 0
-				# 	self.treatment_count_id[treat_label] = []
-				# self.treatment_count[treat_label] += 1
-				# if self.treatment_count[treat_label] > args.max_images_per_treatment and args.max_images_per_treatment != -1:
-				# 	continue
 				treat_label = treatment
 				if treat_label not in self.treatment2index:
 					continue
@@ -383,26 +370,6 @@ class TripletImageLoader(torch.utils.data.Dataset):
 		new_data = self.train_imnames[idx].copy()
 		self.train_imnames = new_data
 		#print("!!!!!!!!!!!!ADJUSTBASEINDEX", len(new_data))
-
-	# def fetch(self, targets):
-	#     whole_targets_np = np.array(self.treatment2index.values())
-	#     uniq_targets = np.unique(whole_targets_np)
-	#     idx_dict = {}
-	#     for uniq_target in uniq_targets:
-	#         idx_dict[uniq_target] = np.where(whole_targets_np == uniq_target)[0]
-
-	#     idx_list = []
-	#     for target in targets:
-	#         idx_list.append(np.random.choice(idx_dict[target.item()], 1))
-	#     idx_list = np.array(idx_list).flatten()
-	#     imgs = []
-	#     for idx in idx_list:
-	#         img = self.whole_data[idx]
-	#         img = Image.fromarray(img)
-	#         img = self.transform(img)
-	#         imgs.append(img[None, ...])
-	#     train_data = torch.cat(imgs, dim=0)
-	#     return train_data
 
 	def __getitem__(self, index):
 		img = self.load_img(index)

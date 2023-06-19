@@ -30,6 +30,9 @@ from LitCNN import *
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from adaptation_methods import fine_LitCNN
+from adaptation_methods import crust_LitCNN
+from adaptation_methods import sft_LitCNN
 
 # Training settings
 parser = argparse.ArgumentParser(description='Drug Discovery')
@@ -96,26 +99,18 @@ parser.add_argument('--r', type=float, default=2.0,
                     help="Distance threshold (i.e. radius) in calculating clusters.")
 parser.add_argument('--use_crust', action='store_true',
                     help="Whether to use crust in dataset.")
-parser.add_argument('--use_crust_w', action='store_true',
+parser.add_argument('--use_crust_k', action='store_true',
                     help="Whether to use crust with control knowledge in dataset.")
 parser.add_argument('--num_treatment_class', type=int, default=1)
 parser.add_argument('--fl-ratio', type=float, default=0.8,
                     help="Ratio for number of facilities.")
-parser.add_argument('--use_newgmm', action='store_true',
-                    help="select coresets with new Gaussian mixture model")
-parser.add_argument('--naive_init', action='store_true',
-                    help="initial Gaussian distribution with label points directly")
-parser.add_argument('--gmm_ratio', type=float, default=0.8,
-                    help="Ratio for subset of gmm method")
-parser.add_argument('--newgmm_startacc', type=float, default=0.0,
-                    help="start epoch to use new gmm.")
 parser.add_argument('--use_fine', action='store_true',
                     help="select coresets with FINE")
-parser.add_argument('--use_fine_w', action='store_true',
+parser.add_argument('--use_fine_k', action='store_true',
                     help="select coresets with FINE_w")
 parser.add_argument('--use_self_filter', action='store_true',
                     help="select coresets with self-filter method")
-parser.add_argument('--use_self_filter_w', action='store_true',
+parser.add_argument('--use_self_filter_k', action='store_true',
                     help="select coresets with self_filter_w")
 parser.add_argument('--self_filter_k', type=int, default=3, metavar='self_filter_k',
                     help='The size of the self-filter memory bank')
@@ -125,20 +120,15 @@ parser.add_argument('--treatment_hard', action='store_true',
 def main():
     global args
     args = parser.parse_args()
-    #torch.set_num_threads(args.num_processors)
     torch.manual_seed(args.seed)
 
     print(args)
     test_loader = torch.utils.data.DataLoader(TripletImageLoader(args, 'test', args.eval_dataset),batch_size=args.batch_size, shuffle=False, num_workers=args.num_processors, pin_memory=True)
     if args.test:
-        # train_data_module = PLDataModule(args)
-        # val_loader = train_data_module.val_dataloader()
         logger = TensorBoardLogger("tb_logs", name='test_'+args.name)
         checkpoint = torch.load(args.resume)
         best_model = LitCNN(args, args.test_class_num)
         best_model.load_state_dict(checkpoint)
-        # best_model.load_state_dict(checkpoint['state_dict'])
-        # best_model = LitCNN.load_from_checkpoint(args.resume)
         trainer = pl.Trainer(devices=args.num_gpus, accelerator="gpu", strategy="dp", logger=logger)
         best_model.eval()
         trainer.test(best_model, test_loader)
@@ -147,32 +137,35 @@ def main():
         # optionally resume from a checkpoint
         cudnn.benchmark = True
 
-        # train_dataset = TripletImageLoader(args, 'train', args.dataset)
-        # train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
         train_data_module = PLDataModule(args)
         train_loader = train_data_module.train_dataloader()
-        #val_loader = torch.utils.data.DataLoader(TripletImageLoader(args, 'val', args.dataset),batch_size=args.batch_size, **kwargs)
         val_loader = train_data_module.val_dataloader()
         nb_classes = len(list(train_loader.dataset.treatment_count_id.keys()))
-        if args.use_newgmm:
-            store_name = '_'.join([args.dataset, 'use_newgmm', 'gmm_ratio('+str(args.gmm_ratio)+')', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')',  str(args.max_images_per_treatment), str(args.max_num_treatment)])
-            if args.naive_init:
-                store_name = '_'.join([args.dataset, 'use_newgmm_naive', 'gmm_ratio('+str(args.gmm_ratio)+')', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')',  str(args.max_images_per_treatment), str(args.max_num_treatment)])
-        elif args.use_crust:
+        if args.use_crust:
             store_name = '_'.join([args.dataset, 'use_crust', 'fl_ratio('+str(args.fl_ratio)+')', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
-        elif args.use_crust_w:
-            store_name = '_'.join([args.dataset, 'use_crust_w', 'fl_ratio('+str(args.fl_ratio)+')', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = crust_LitCNN(args, nb_classes, train_data_module)
+        elif args.use_crust_k:
+            store_name = '_'.join([args.dataset, 'use_crust_k', 'fl_ratio('+str(args.fl_ratio)+')', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = crust_LitCNN(args, nb_classes, train_data_module)        
         elif args.use_fine:
             store_name = '_'.join([args.dataset, 'use_fine',  'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
-        elif args.use_fine_w:
-            store_name = '_'.join([args.dataset, 'use_fine_w', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = fine_LitCNN(args, nb_classes, train_data_module)
+        elif args.use_fine_k:
+            store_name = '_'.join([args.dataset, 'use_fine_k', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = fine_LitCNN(args, nb_classes, train_data_module)
+        elif args.use_self_filter:
+            store_name = '_'.join([args.dataset, 'use_sft',  'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = sft_LitCNN(args, nb_classes, train_data_module)
+        elif args.use_self_filter_k:
+            store_name = '_'.join([args.dataset, 'use_sft_k', 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = sft_LitCNN(args, nb_classes, train_data_module)
         else:
             store_name = '_'.join([args.dataset, 'bs('+str(args.batch_size)+')', 'lr('+str(args.lr)+')', str(args.max_images_per_treatment), str(args.max_num_treatment)])
+            cnn_model = LitCNN(args, nb_classes, train_data_module)
         # tb_filename = os.path.join('tb_logs', store_name)
         # if not os.path.exists(tb_filename):
         #     os.makedirs(tb_filename)
         logger = TensorBoardLogger("tb_logs", name=store_name)
-        cnn_model = LitCNN(args, nb_classes, train_data_module)
         checkpoint_callback = ModelCheckpoint(monitor='validation_top1acc', mode='max', dirpath='saved/',filename=args.name+'_number_class_'+str(nb_classes)+'_{epoch:02d}-{val_loss:.2f}')
         trainer = pl.Trainer(max_epochs=args.epochs, devices=args.num_gpus, accelerator="gpu", strategy="dp", logger=logger, log_every_n_steps=10, reload_dataloaders_every_n_epochs=1, callbacks=[checkpoint_callback])
         trainer.fit(cnn_model, train_loader, val_loader)

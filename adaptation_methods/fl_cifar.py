@@ -1,3 +1,5 @@
+# This file is from snap-stanford/crust repo: https://github.com/snap-stanford/crust/tree/master
+
 import numpy as np
 
 class FacilityLocationCIFAR:
