@@ -11,7 +11,7 @@ from torch.autograd import grad
 from sklearn.mixture import GaussianMixture as GMM
 from tqdm import tqdm
 import torch.nn.functional as F
-from cell_data import LitCNN
+from LitCNN import *
 
 
 def get_singular_vector(singular_vector_dict, features, labels):

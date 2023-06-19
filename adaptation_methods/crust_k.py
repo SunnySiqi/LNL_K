@@ -14,7 +14,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from lazyGreedy import lazy_greedy_heap
 from fl_cifar import FacilityLocationCIFAR
-from cell_data import LitCNN
+from LitCNN import *
 
 class crust_LitCNN(LitCNN):
 	def __init__(self, args, num_classes=1, train_data_module=None):
@@ -145,7 +145,7 @@ class crust_LitCNN(LitCNN):
 			ssets = self.crust()
 		elif self.args.use_crust_w and self.trainer.current_epoch >= self.args.start_epoch:
 			ssets = self.crust_k()
-			
+
 		self.train_data_module.train_dataset.adjust_base_indx(ssets)
 		print("NEW DATA!!!!!!", str(self.trainer.global_rank) + "_" + str(len(self.train_data_module.train_dataset.train_imnames)))
 		print("change train loader")

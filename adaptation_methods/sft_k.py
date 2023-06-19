@@ -11,7 +11,7 @@ from torch.autograd import grad
 from tqdm import tqdm
 import torch.nn.functional as F
 from sft_loss import SelfFilterLoss
-from cell_data import LitCNN
+from LitCNN import *
 
 class sft_LitCNN(LitCNN):
 	def __init__(self, args, num_classes=1, train_data_module=None):
