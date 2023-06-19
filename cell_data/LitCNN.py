@@ -93,26 +93,56 @@ class LitCNN(pl.LightningModule):
 			self.net = nn.Sequential(*layers)
 			self.linear = nn.Linear(512, num_classes)
 
+	@abstractmethod
 	def fine(self):
+		"""
+		Select clean samples to update the train_data_loader with FINE method.
+		"""
 
 	def fine_k(self):
+		"""
+		Select clean samples to update the train_data_loader with FINE+k method.
+		"""
 
 	def estimate_grads(self):
+		"""
+		Helper function of CRUST method.
+		"""
 
 	def estimate_grads_w_noise_knowledge(self):
+		"""
+		Helper function of CRUST+k method.
+		"""
 
 	def crust(self):
+		"""
+		Select clean samples to update the train_data_loader with CRUST method.
+		"""
 
 	def crust_k(self):
+		"""
+		Select clean samples to update the train_data_loader with CRUST+K method.
+		"""
 
 	def get_memorybank(self):
+		"""
+		Helper function of SFT method.
+		"""
 
 	def get_memorybank_k(self):
+		"""
+		Helper function of SFT+K method.
+		"""
 
 	def sft(self):
+		"""
+		Select clean samples to update the train_data_loader with SFT method.
+		"""
 
 	def sft_k(self):
-
+		"""
+		Select clean samples to update the train_data_loader with SFT+K method.
+		"""
 
 		
 	def forward(self, x):
