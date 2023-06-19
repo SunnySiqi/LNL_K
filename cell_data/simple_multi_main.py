@@ -20,10 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from adaptation_methods.LitCNN import LitCNN
-from adaptation_methods.fine_k import fine_LitCNN
-from adaptation_methods.crust_k import crust_LitCNN
-from adaptation_methods.sft_k import sft_LitCNN
+from adaptation_methods import *
 
 # Training settings
 parser = argparse.ArgumentParser(description='Drug Discovery')
