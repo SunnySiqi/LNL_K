@@ -18,7 +18,6 @@ import torchvision.models as models
 from torch.autograd import grad
 from tqdm import tqdm
 from simple_multi_dataloader import TripletImageLoader, PLDataModule
-from model_wcrust import NormInputCNN, ProxyNCA_prob
 from xbm import XBM
 from revgrad import GradientReversal
 from fl_cifar import FacilityLocationCIFAR
