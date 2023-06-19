@@ -4,9 +4,7 @@ import os
 import sys
 import shutil
 import json
-
 import numpy as np
-
 import torch, sklearn
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,13 +16,7 @@ import torchvision.models as models
 from torch.autograd import grad
 from tqdm import tqdm
 from simple_multi_dataloader import TripletImageLoader, PLDataModule
-from xbm import XBM
-from revgrad import GradientReversal
-from fl_cifar import FacilityLocationCIFAR
-from lazyGreedy import lazy_greedy_heap
-from sklearn.metrics import pairwise_distances
 from torch.utils.tensorboard import SummaryWriter
-from sklearn.cluster import KMeans
 from LitCNN import *
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
