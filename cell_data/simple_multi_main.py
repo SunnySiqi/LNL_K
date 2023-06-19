@@ -17,10 +17,10 @@ from torch.autograd import grad
 from tqdm import tqdm
 from simple_multi_dataloader import TripletImageLoader, PLDataModule
 from torch.utils.tensorboard import SummaryWriter
-from LitCNN import *
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from adaptation_methods import LitCNN
 from adaptation_methods import fine_LitCNN
 from adaptation_methods import crust_LitCNN
 from adaptation_methods import sft_LitCNN
