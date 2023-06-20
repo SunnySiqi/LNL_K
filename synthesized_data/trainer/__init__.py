@@ -5,3 +5,5 @@ from .coteaching_trainer import *
 from .dynamic_trainer import *
 from .realdataset_trainer import *
 from .dynamic_coteach_trainer import *
+from .crust_trainer import *
+from .sft_trainer import *

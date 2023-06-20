@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix
 
 
 
-class DefaultTrainer(BaseTrainer):
+class CRUSTTrainer(BaseTrainer):
 	"""
 	DefaultTrainer class
 
@@ -87,6 +87,69 @@ class DefaultTrainer(BaseTrainer):
 			self.writer.add_scalar('{}'.format(metric.__name__), acc_metrics[i])
 		return acc_metrics
 
+
+	def estimate_grads(self, epoch):
+	# switch to train mode
+		self.model.train()
+		all_grads = []
+		all_labels = []
+		all_indexs = []
+		with tqdm(self.data_loader) as progress:
+			for batch_idx, (data, label, indexs, _) in enumerate(progress):
+				data = data.to(self.device)
+				all_labels.append(label)
+				all_indexs.append(indexs)
+				label = label.to(self.device)
+				# compute output
+				feat, output = self.model(data)
+				if self.config['train_loss']['type'] == 'CrossEntropyLoss':
+					loss = self.train_criterion()(output, label)
+				else:
+					loss = self.train_criterion(indexs.cpu().detach().numpy().tolist(), output, label)
+				est_grad = grad(loss, feat)
+				all_grads.append(est_grad[0].detach().cpu().numpy())
+			all_grads = np.vstack(all_grads)
+			all_labels = np.hstack(all_labels)
+			all_indexs = np.hstack(all_indexs)
+		return all_grads, all_labels, all_indexs
+
+	def estimate_grads_w_noise_knowledge(self, epoch):
+	# switch to train mode
+		self.model.train()
+		all_grads_dict = {}
+		all_grads_dict['self'] = []
+		for noise_class in list(self.noise_sources):
+			all_grads_dict[noise_class] = []
+		all_labels = []
+		all_indexs = []
+
+		with tqdm(self.data_loader) as progress:
+			for batch_idx, (data, label, indexs, _) in enumerate(progress):
+				data = data.to(self.device)
+				all_labels.append(label)
+				all_indexs.append(indexs)
+				label = label.to(self.device)
+				# compute output
+				feat, output = self.model(data)
+				loss = self.train_criterion()(output, label)
+				est_grad = grad(loss, feat)
+				all_grads_dict['self'].append(est_grad[0].detach().cpu().numpy())
+
+				for noise_class in list(self.noise_sources):
+					feat, output = self.model(data)
+					noise_label = torch.tensor(np.repeat(noise_class, len(data)))
+					noise_label = noise_label.to(self.device)
+					loss_noise = self.train_criterion()(output, noise_label)
+					est_grad = grad(loss_noise, feat)
+					all_grads_dict[noise_class].append(est_grad[0].detach().cpu().numpy())
+
+			for dict_key in all_grads_dict:
+				all_grads_dict[dict_key] = np.vstack(all_grads_dict[dict_key])
+			all_labels = np.hstack(all_labels)
+			all_indexs = np.hstack(all_indexs)
+		return all_grads_dict, all_labels, all_indexs
+
+
 	def get_feature(self, epoch):
 		self.model.eval()
 		all_labels = []
@@ -112,7 +175,6 @@ class DefaultTrainer(BaseTrainer):
 				clean_idx += indexs[list(np.where((label == label_gt) == True)[0])]
 		return clean_idx
 
-
 	def _train_epoch(self, epoch):
 		"""
 
@@ -128,6 +190,63 @@ class DefaultTrainer(BaseTrainer):
 
 			The metrics in log must have the key 'metrics'.
 		"""
+		if self.config['subset_training']['use_crust']:
+			self.data_loader.train_dataset.switch_data()
+			grads_all, labels_all, indexs_all = self.estimate_grads(epoch)
+			# per-class clustering
+			ssets = []
+			for c in list(set(labels_all)):
+				sample_ids = np.where((labels_all == c) == True)[0]
+				grads = grads_all[sample_ids]
+				dists = pairwise_distances(grads)
+				V = range(len(grads))
+				F = FacilityLocationCIFAR(V, D=dists)
+				B = int(self.config['subset_training']['crust_fl_ration'] * len(grads))
+				sset, vals = lazy_greedy_heap(F, V, B)
+				sset = sample_ids[np.array(sset)]
+				ssets += list(sset)
+			self.data_loader.train_dataset.adjust_base_indx_tmp(indexs_all[ssets])
+			print("change train loader")
+
+
+		elif self.config['subset_training']['adptive_crust']:
+			self.data_loader.train_dataset.switch_data()
+			grads_all_dict, labels_all, indexs_all = self.estimate_grads_w_noise_knowledge(epoch)
+			# per-class clustering
+			ssets = []
+			for c in list(set(labels_all)):
+				sample_ids = np.where((labels_all == c) == True)[0]
+				grads_self = grads_all_dict['self'][sample_ids]
+				if c not in self.noise_source_dict and c not in self.clean_classes:
+					dists = pairwise_distances(grads_self)
+					V = range(len(grads_self))
+					F = FacilityLocationCIFAR(V, D=dists)
+					B = int(self.config['subset_training']['crust_fl_ration'] * len(grads_self))
+					sset, vals = lazy_greedy_heap(F, V, B)
+					sset = sample_ids[np.array(sset)]
+				elif c in self.clean_classes:
+					sset = sample_ids
+				else:
+					sset = sample_ids
+					noisy_num_per_class = int((1-self.config['subset_training']['crust_fl_ration'])/len(self.noise_source_dict[c])*len(sset))
+					B = noisy_num_per_class + len(sset)
+					for noise_source in self.noise_source_dict[c]:
+						grad_noise = grads_all_dict[noise_source][sset]
+						noise_source_sample_ids = np.where((labels_all == noise_source) == True)[0]
+						grad_noise_self = grads_all_dict['self'][noise_source_sample_ids]
+						grads_all = np.concatenate((grad_noise, grad_noise_self), axis=0)
+						sample_ids_all = np.concatenate((sset, noise_source_sample_ids), axis=0)
+						dists = pairwise_distances(grads_all)
+						V = range(len(grads_all))
+						F = FacilityLocationCIFAR(V, D=dists)
+						B = int((1-self.config['subset_training']['crust_fl_ration'])/len(self.noise_source_dict[c]) * len(grad_noise) + len(noise_source_sample_ids))
+						noise_sset, vals = lazy_greedy_heap(F, V, B)
+						noise_sset = sample_ids_all[np.array(noise_sset)]
+						top_class_intersection = list(set(sset).intersection(set(noise_sset)))[:noisy_num_per_class]
+						sset = np.array(list(set(sset).difference(set(top_class_intersection))))
+						sset = sset
+				ssets += list(sset)
+			self.data_loader.train_dataset.adjust_base_indx_tmp(indexs_all[ssets])
 		
 		self.model.train()
 

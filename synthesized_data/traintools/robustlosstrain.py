@@ -14,7 +14,7 @@ import loss as module_loss
 import model.metric as module_metric
 import model.model as module_arch
 
-from trainer import DefaultTrainer, TruncatedTrainer, GroundTruthTrainer, DynamicTrainer
+from trainer import DefaultTrainer, TruncatedTrainer, GroundTruthTrainer, DynamicTrainer, CRUSTTrainer, SFTTrainer
 
 from selection.svd_classifier import *
 from selection.gmm import *
@@ -258,6 +258,34 @@ def robustlosstrain(parse, config: ConfigParser):
 		
 		else:
 			trainer = DefaultTrainer(model, train_loss, metrics, optimizer,
+									   config=config,
+									   data_loader=data_loader,
+									   parse=parse,
+									   teacher=teacher,
+									   valid_data_loader=valid_data_loader,
+									   test_data_loader=test_data_loader,
+									   lr_scheduler=lr_scheduler,
+									   val_criterion=val_loss,
+									   mode = parse.mode,
+									   entropy = parse.entropy,
+									   threshold = parse.threshold
+								  )
+	elif config['train_loss']['type'] == 'SelfFilterLoss':
+		trainer = SFTTrainer(model, train_loss, metrics, optimizer,
+									   config=config,
+									   data_loader=data_loader,
+									   parse=parse,
+									   teacher=teacher,
+									   valid_data_loader=valid_data_loader,
+									   test_data_loader=test_data_loader,
+									   lr_scheduler=lr_scheduler,
+									   val_criterion=val_loss,
+									   mode = parse.mode,
+									   entropy = parse.entropy,
+									   threshold = parse.threshold
+								  )
+	elif config['train_loss']['type'] == 'CrossEntropyLoss':
+		trainer = CRUSTTrainer(model, train_loss, metrics, optimizer,
 									   config=config,
 									   data_loader=data_loader,
 									   parse=parse,

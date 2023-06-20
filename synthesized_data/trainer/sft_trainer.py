@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix
 
 
 
-class DefaultTrainer(BaseTrainer):
+class SFTTrainer(BaseTrainer):
 	"""
 	DefaultTrainer class
 
@@ -87,6 +87,7 @@ class DefaultTrainer(BaseTrainer):
 			self.writer.add_scalar('{}'.format(metric.__name__), acc_metrics[i])
 		return acc_metrics
 
+
 	def get_feature(self, epoch):
 		self.model.eval()
 		all_labels = []
@@ -112,6 +113,149 @@ class DefaultTrainer(BaseTrainer):
 				clean_idx += indexs[list(np.where((label == label_gt) == True)[0])]
 		return clean_idx
 
+	def get_memorybank(self, epoch):
+		if epoch >= self.config['trainer']['warmup']:
+			selection = True
+		else:
+			selection = False
+
+		k = int(self.config['subset_training']['self_filter_k'])
+
+		self.model.eval()
+
+		if selection:
+			memory_bank_last = self.memory_bank[-1]
+			fluctuation_ = [0] * 50000
+
+		result = torch.zeros(50000)
+		with torch.no_grad():
+			with tqdm(self.data_loader) as progress:
+				for batch_idx, (data, label, indexs, _) in enumerate(progress):
+					data = data.to(self.device)
+					label = label.to(self.device)
+					feat, output = self.model(data)
+					max_probs, pred = output.max(1)
+
+					for b in range(data.size(0)):
+						sample_index = indexs[b]
+						if pred[b] == label[b]:
+							result[sample_index] = max_probs[b]
+						else:
+							result[sample_index] = 0
+						if selection:
+						# calculate the fluctuation
+							if memory_bank_last[sample_index] > result[sample_index] and result[sample_index] == 0:
+							# the prediction of this sample changes from correct to wrong, thus it is fluctuation. we consider it as the clean with 0%
+								fluctuation_[sample_index] = 0
+							else:
+								fluctuation_[sample_index] = 1
+
+		# In practice, the fluctuation of predictions is easily influenced by SGD optimizer especially in extreme noise ratio,
+		# Here, we design a smooth way by adding the confidence of prediction to fluctuation.
+		# For that, the criterion will select the sample with high confidence even if there is a fluctuation
+		if selection:
+			for i in range(k - 1):
+				self.memory_bank[i] = self.memory_bank[i + 1]
+			self.memory_bank[-1] = result
+
+			confidence_smooth = torch.zeros_like(self.memory_bank[0])
+			for i in range(k):
+				confidence_smooth += self.memory_bank[i]
+			prob = (confidence_smooth.numpy() + np.array(fluctuation_)) / (k + 1)  # adding confidence make fluctuation more smooth
+			pred = (prob > 0.5)
+			return prob, pred
+
+		else:
+			if len(self.memory_bank) < k:
+				self.memory_bank.append(result)
+			else:
+				for i in range(k - 1):
+					self.memory_bank[i] = self.memory_bank[i + 1]
+				self.memory_bank[-1] = result
+			return
+
+	def get_memorybank_w(self, epoch):
+		if epoch >= self.config['trainer']['warmup']:
+			selection = True
+		else:
+			selection = False
+
+		k = int(self.config['subset_training']['self_filter_k'])
+
+		self.model.eval()
+
+		if selection:
+			memory_bank_last = self.memory_bank[-1]
+			fluctuation_ = [0] * 50000
+
+		clean_sset_id = []
+		result = torch.zeros(50000)
+		sample_class_idx_dict ={}
+		with torch.no_grad():
+			with tqdm(self.data_loader) as progress:
+				for batch_idx, (data, label, indexs, _) in enumerate(progress):
+					data = data.to(self.device)
+					label = label.to(self.device)
+					feat, output = self.model(data)
+					max_probs, pred = output.max(1)
+
+					pred = pred.cpu().detach().numpy().tolist()
+					label = label.cpu().detach().numpy().tolist()
+					indexs = indexs.cpu().detach().numpy().tolist()
+					for b in range(data.size(0)):
+						if label[b] not in sample_class_idx_dict:
+							sample_class_idx_dict[label[b]] = []
+						sample_class_idx_dict[label[b]].append(indexs[b])
+						
+						sample_index = indexs[b]
+						if label[b] in self.clean_classes:
+							clean_sset_id.append(sample_index)
+
+						if pred[b] == label[b]:
+							result[sample_index] = max_probs[b]
+						elif label[b] in list(self.noise_source_dict.keys()) and pred[b] in self.noise_source_dict[label[b]]:
+							result[sample_index] = -max_probs[b]
+						else:
+							result[sample_index] = 0
+						if selection:
+						# calculate the fluctuation
+							#if memory_bank_last[sample_index] < 0 and result[sample_index] >= 0 or memory_bank_last[sample_index] >= 0 and result[sample_index] < 0:
+							# the prediction of this sample changes from correct to wrong, thus it is fluctuation. we consider it as the clean with 0%
+							if memory_bank_last[sample_index] > 0 and result[sample_index] < 0:
+								fluctuation_[sample_index] = 0
+							else:
+								fluctuation_[sample_index] = 1
+
+		# In practice, the fluctuation of predictions is easily influenced by SGD optimizer especially in extreme noise ratio,
+		# Here, we design a smooth way by adding the confidence of prediction to fluctuation.
+		# For that, the criterion will select the sample with high confidence even if there is a fluctuation
+		if selection:
+			for i in range(k - 1):
+				self.memory_bank[i] = self.memory_bank[i + 1]
+			self.memory_bank[-1] = result
+
+			confidence_smooth = torch.zeros_like(self.memory_bank[0])
+			for i in range(k):
+				confidence_smooth += self.memory_bank[i]
+			prob = (confidence_smooth.numpy() + np.array(fluctuation_)) / (k + 1)  # adding confidence make fluctuation more smooth
+			#pred = (prob > 0.5)
+			prob[clean_sset_id] = 1
+			pred = (prob > 0.5)
+			ssets = pred.nonzero()[0]
+			select_sample_class_dict ={}
+			for c in range(10):
+				select_sample_class_dict[c] = len(list(set(sample_class_idx_dict[c]).intersection(set(ssets))))
+			return prob, pred
+
+		else:
+			if len(self.memory_bank) < k:
+				self.memory_bank.append(result)
+			else:
+				for i in range(k - 1):
+					self.memory_bank[i] = self.memory_bank[i + 1]
+				self.memory_bank[-1] = result
+			return
+
 
 	def _train_epoch(self, epoch):
 		"""
@@ -128,6 +272,25 @@ class DefaultTrainer(BaseTrainer):
 
 			The metrics in log must have the key 'metrics'.
 		"""
+		if epoch <= self.config['trainer']['warmup']:
+			if self.config['subset_training']['self_filter']:
+				self.get_memorybank(epoch)
+			elif self.config['subset_training']['self_filter_w']:
+				self.get_memorybank_w(epoch)
+		else:
+			if self.config['subset_training']['self_filter']:
+				self.data_loader.train_dataset.switch_data()
+				prob, pred = self.get_memorybank(epoch)
+				ssets = pred.nonzero()[0]
+				self.data_loader.train_dataset.adjust_base_indx_tmp(ssets)
+				print("change train loader")
+
+			elif self.config['subset_training']['self_filter_w']:
+				self.data_loader.train_dataset.switch_data()
+				prob, pred = self.get_memorybank_w(epoch)
+				ssets = pred.nonzero()[0]
+				self.data_loader.train_dataset.adjust_base_indx_tmp(ssets)
+				print("change train loader")
 		
 		self.model.train()
 
