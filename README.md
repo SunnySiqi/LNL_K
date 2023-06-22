@@ -1,5 +1,5 @@
 # LNL_K
-Implementation of the paper "LNL+K: Learning with Noisy Labels and Noise Source Distribution Knowledge"
+Implementation of the paper "LNL+K: Learning with Noisy Labels and Noise Source Distribution Knowledge", [[Arxiv](http://arxiv.org/abs/2306.11911)]
 
 ## Requirements
 The code has been written using Python3 (3.10.4), run `pip install -r requirements.txt` to install relevant python packages.
