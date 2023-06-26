@@ -285,6 +285,7 @@ class SFTTrainer(BaseTrainer):
 				prob, pred = self.get_memorybank_w(epoch)
 				ssets = pred.nonzero()[0]
 				self.data_loader.train_dataset.adjust_base_indx_tmp(ssets)
+				self.data_loader.train_dataset.train_balance_sample()
 				print("change train loader")
 		
 		self.model.train()
