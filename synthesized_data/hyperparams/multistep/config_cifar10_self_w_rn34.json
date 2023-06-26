@@ -71,8 +71,7 @@
         "control": false,
         "non_ctl_cls_sample": 500,
         "ctl_cls_sample": 4500,
-        "ctl_cls_lower_bound": 5,
-        "get_noise_source": 10
+        "ctl_cls_lower_bound": 5
     },
 
 

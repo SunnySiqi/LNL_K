@@ -57,28 +57,23 @@ class SFTTrainer(BaseTrainer):
 		if self.entropy:
 			self.entro_loss = Entropy(threshold)
 
-		if self.config['trainer']['get_noise_source'] > 0:
-			self.noise_source_dict = {}
-			self.clean_classes = np.array([])
-			self.noise_sources = set()
+		self.noise_source_dict = {}
+		if self.config['trainer']['control']:
+			ctl_cls_lower_bound = self.config['trainer']['ctl_cls_lower_bound']
+			c_cls_range = range(ctl_cls_lower_bound)
+			for c in c_cls_range:
+				self.noise_source_dict[c] = np.arange(ctl_cls_lower_bound, self.config['num_classes'])
+			self.clean_classes = np.array(list(set(np.arange(self.config['num_classes'])) - set(np.array(list(self.noise_source_dict.keys())))))
 		else:
-			self.noise_source_dict = {}
-			if self.config['trainer']['control']:
-				ctl_cls_lower_bound = self.config['trainer']['ctl_cls_lower_bound']
-				c_cls_range = range(ctl_cls_lower_bound)
-				for c in c_cls_range:
-					self.noise_source_dict[c] = np.arange(ctl_cls_lower_bound, self.config['num_classes'])
-				self.clean_classes = np.array(list(set(np.arange(self.config['num_classes'])) - set(np.array(list(self.noise_source_dict.keys())))))
-			else:
-				confusing_pairs = self.config['trainer']['asym_pairs']
-				for p in confusing_pairs:
-					# self.noise_source_dict[int(p[0])] = np.array([int(p[1])])
-					self.noise_source_dict[int(p[1])] = np.array([int(p[0])])
-				self.clean_classes =  np.array(list(set(np.arange(self.config['num_classes'])) - set(np.array(list(self.noise_source_dict.keys())))))
-			self.noise_sources = set()
-			for target_class in self.noise_source_dict:
-				for noise_class in self.noise_source_dict[target_class]:
-					self.noise_sources.add(noise_class)
+			confusing_pairs = self.config['trainer']['asym_pairs']
+			for p in confusing_pairs:
+				# self.noise_source_dict[int(p[0])] = np.array([int(p[1])])
+				self.noise_source_dict[int(p[1])] = np.array([int(p[0])])
+			self.clean_classes =  np.array(list(set(np.arange(self.config['num_classes'])) - set(np.array(list(self.noise_source_dict.keys())))))
+		self.noise_sources = set()
+		for target_class in self.noise_source_dict:
+			for noise_class in self.noise_source_dict[target_class]:
+				self.noise_sources.add(noise_class)
 
 	def _eval_metrics(self, output, label):
 		acc_metrics = np.zeros(len(self.metrics))
@@ -478,6 +473,10 @@ class SFTTrainer(BaseTrainer):
 
 
 	def _warmup_epoch(self, epoch):
+		if self.config['subset_training']['self_filter']:
+			self.get_memorybank(epoch)
+		elif self.config['subset_training']['self_filter_w']:
+			self.get_memorybank_w(epoch)
 		total_loss = 0
 		total_metrics = np.zeros(len(self.metrics))
 		self.model.train()
